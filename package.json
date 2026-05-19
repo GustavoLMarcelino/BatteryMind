@@ -1,0 +1,17 @@
+{
+  "name": "batterymind",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BatteryMind com frontend Vite React e backend Express TypeScript.",
+  "scripts": {
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

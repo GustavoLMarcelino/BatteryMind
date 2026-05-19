@@ -1,0 +1,345 @@
+@baseUrl = http://localhost:3001/api
+
+### Health check
+GET {{baseUrl}}/health
+
+### NÃO deve recomendar: mensagem genérica
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "estou",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### NÃO deve recomendar: saudação
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "oi",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### NÃO deve recomendar: pede valor sem veículo
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "qual valor?",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### NÃO deve recomendar: intenção sem veículo
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "preciso de bateria",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### NÃO deve recomendar: problema sem modelo do veículo
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "meu carro não liga",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "alta"
+}
+
+### NÃO deve recomendar: caminhão genérico sem detalhes
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "tenho um caminhão",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Deve recomendar: Virtus extraído da mensagem
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "Tenho um virtus 2018 que não esta ligando",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Deve recomendar: Gol 1.0 com urgência
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "Meu Gol 1.0 não liga e preciso de uma bateria hoje",
+  "veiculo": "Gol 1.0",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "alta"
+}
+
+### Deve recomendar: Onix 2020 com orçamento extraído
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "nomeCliente": "Cliente",
+  "mensagem": "Tenho um Onix 2020 e queria uma bateria até 500 reais",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "qualidade",
+  "urgenciaInformada": "baixa"
+}
+
+### Naive Bayes deve tratar texto genérico como neutro
+POST {{baseUrl}}/analisar-sentimento
+Content-Type: application/json
+
+{
+  "mensagem": "estou"
+}
+
+### Limpar contexto de conversa
+DELETE {{baseUrl}}/conversas/teste1
+
+### Conversa 1/3: caminhão sem tensão
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "teste1",
+  "nomeCliente": "Cliente",
+  "mensagem": "estou com um problema no meu caminhão",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Conversa 2/3: informar tensão mantendo contexto
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "teste1",
+  "nomeCliente": "Cliente",
+  "mensagem": "ele usa 24V",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Conversa 3/3: completar problema e recomendar por Caminhão 24V
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "teste1",
+  "nomeCliente": "Cliente",
+  "mensagem": "é um caminhão 24V que não está ligando",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "alta"
+}
+
+### Debug do contexto atual
+GET {{baseUrl}}/conversas/teste1
+
+### Social: saudacao
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "social1",
+  "nomeCliente": "Cliente",
+  "mensagem": "oi",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Social: agradecimento
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "social1",
+  "nomeCliente": "Cliente",
+  "mensagem": "obrigado",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Social: confirmacao
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "social1",
+  "nomeCliente": "Cliente",
+  "mensagem": "ok",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Social: despedida
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "social1",
+  "nomeCliente": "Cliente",
+  "mensagem": "tchau",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Tecnico A: moto sem modelo nao recomenda
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "moto-sem-modelo",
+  "nomeCliente": "Cliente",
+  "mensagem": "estou com um problema na minha moto",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Tecnico B: moto com modelo e sintoma forte recomenda
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "moto-cg160",
+  "nomeCliente": "Cliente",
+  "mensagem": "Minha CG 160 nao acende nada",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Tecnico C: Onix com sintoma generico recomenda com aviso
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "onix-generico",
+  "nomeCliente": "Cliente",
+  "mensagem": "Estou com problema no meu Onix 2020, ele nao quer ligar",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Tecnico D1: contexto caminhao pede tensao
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "truck-24",
+  "nomeCliente": "Cliente",
+  "mensagem": "estou com problema no meu caminhao",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Tecnico D2: resposta curta 24 vira 24V
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "truck-24",
+  "nomeCliente": "Cliente",
+  "mensagem": "24",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Tecnico D3: usa contexto caminhao 24V e recomenda
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "truck-24",
+  "nomeCliente": "Cliente",
+  "mensagem": "nao liga nada",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "alta"
+}
+
+### Tecnico E: troca de contexto Onix para moto
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "switch-onix-moto",
+  "nomeCliente": "Cliente",
+  "mensagem": "Meu Onix 2020 nao liga",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Tecnico E2: deve limpar Onix e pedir modelo da moto
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "switch-onix-moto",
+  "nomeCliente": "Cliente",
+  "mensagem": "estou com problema na minha moto",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
