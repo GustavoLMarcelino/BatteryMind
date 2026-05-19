@@ -4,6 +4,7 @@ export type SymptomCategory =
   | "partida_fraca"
   | "problema_recorrente"
   | "generico_nao_liga"
+  | "sintoma_nao_informado"
   | "desconhecido";
 
 export type SymptomAnalysis = {

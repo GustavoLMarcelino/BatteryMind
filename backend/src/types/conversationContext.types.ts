@@ -14,6 +14,8 @@ export type ConversationContext = {
   ano?: string;
   tensao?: TensaoVeiculo;
   problema?: string;
+  symptom?: string;
+  genericProblemMention?: boolean;
   orcamentoMaximo?: number;
   preferencia?: PreferenciaCliente;
   urgencia?: UrgenciaInformada;

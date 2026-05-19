@@ -2,11 +2,59 @@ import { ConversationContext } from "../types/conversationContext.types.js";
 import { SymptomAnalysis } from "../types/symptomTriage.types.js";
 import { includesNormalized } from "../utils/textPreprocessing.js";
 
+const unansweredSymptomQuestions = [
+  "O painel acende?",
+  "Ao dar partida o painel pisca ou apaga?",
+  "Faz barulho tipo 'tec tec'?",
+  "A partida está fraca?",
+  "Não acende nada?"
+];
+
+const specificSymptomExpressions = [
+  "nao acende nada",
+  "painel nao acende",
+  "nao liga nada",
+  "morreu tudo",
+  "sem energia",
+  "painel pisca",
+  "painel fica piscando",
+  "luz do painel pisca",
+  "arrasta para ligar",
+  "partida pesada",
+  "partida fraca",
+  "motor gira fraco",
+  "faz tec tec",
+  "tec tec",
+  "vive descarregando",
+  "sempre descarrega",
+  "descarrega todo dia",
+  "troquei e descarregou",
+  "descarregando direto",
+  "descarregou",
+  "bateria arriou",
+  "bateria morreu",
+  "nao liga",
+  "nao esta ligando",
+  "nao quer ligar",
+  "nao pega"
+];
+
 export class SymptomTriageService {
   analyzeSymptoms(message: string, context: ConversationContext): SymptomAnalysis {
     const combinedText = `${context.mensagens.join(" ")} ${message}`;
 
-    if (this.hasAny(combinedText, ["não acende nada", "nao acende nada", "painel não acende", "painel nao acende", "não liga nada", "nao liga nada", "morreu tudo", "sem energia"])) {
+    if (this.hasGenericProblemMention(combinedText) && !this.hasAny(combinedText, specificSymptomExpressions)) {
+      return {
+        symptomCategory: "sintoma_nao_informado",
+        confidence: 20,
+        possibleCauses: [],
+        recommendedQuestions: unansweredSymptomQuestions,
+        recommendedServices: ["Teste elétrico"],
+        canRecommendBatteryDirectly: false
+      };
+    }
+
+    if (this.hasAny(combinedText, ["nao acende nada", "painel nao acende", "nao liga nada", "morreu tudo", "sem energia", "descarregou", "bateria arriou", "bateria morreu"])) {
       return {
         symptomCategory: "sem_energia",
         confidence: 85,
@@ -18,7 +66,7 @@ export class SymptomTriageService {
       };
     }
 
-    if (this.hasAny(combinedText, ["painel pisca", "painel fica piscando", "luz do painel pisca", "arrasta para ligar", "partida pesada", "partida fraca", "motor gira fraco"])) {
+    if (this.hasAny(combinedText, ["painel pisca", "painel fica piscando", "luz do painel pisca", "arrasta para ligar", "partida pesada", "partida fraca", "motor gira fraco", "faz tec tec", "tec tec"])) {
       return {
         symptomCategory: "bateria_fraca",
         confidence: 75,
@@ -42,7 +90,7 @@ export class SymptomTriageService {
       };
     }
 
-    if (this.hasAny(combinedText, ["não liga", "nao liga", "não está ligando", "nao esta ligando", "não quer ligar", "nao quer ligar", "não pega", "nao pega"])) {
+    if (this.hasAny(combinedText, ["nao liga", "nao esta ligando", "nao quer ligar", "nao pega"])) {
       return {
         symptomCategory: "generico_nao_liga",
         confidence: 50,
@@ -71,6 +119,27 @@ export class SymptomTriageService {
 
   private hasAny(text: string, expressions: string[]): boolean {
     return expressions.some((expression) => includesNormalized(text, expression));
+  }
+
+  private hasGenericProblemMention(text: string): boolean {
+    return this.hasAny(text, [
+      "estou com problema",
+      "estou com um problema",
+      "meu carro esta com problema",
+      "minha moto esta com problema",
+      "tenho um problema",
+      "tenho problema",
+      "deu problema",
+      "esta com problema",
+      "ta com problema",
+      "com problema",
+      "com problema no",
+      "com problema na",
+      "problema no veiculo",
+      "problema no carro",
+      "problema na moto",
+      "problema no caminhao"
+    ]);
   }
 }
 

@@ -85,9 +85,26 @@ const problemasConhecidos = [
   "bateria morreu",
   "sem partida",
   "falha na partida",
-  "nao pega",
-  "problema na bateria",
-  "problema"
+  "nao pega"
+];
+
+const mencoesGenericasProblema = [
+  "estou com problema",
+  "estou com um problema",
+  "meu carro esta com problema",
+  "minha moto esta com problema",
+  "tenho um problema",
+  "tenho problema",
+  "deu problema",
+  "esta com problema",
+  "ta com problema",
+  "com problema",
+  "com problema no",
+  "com problema na",
+  "problema no veiculo",
+  "problema no carro",
+  "problema na moto",
+  "problema no caminhao"
 ];
 
 type MessageExtraction = {
@@ -96,6 +113,7 @@ type MessageExtraction = {
   ano?: string;
   tensao?: TensaoVeiculo;
   problema?: string;
+  genericProblemMention?: boolean;
   orcamentoMaximo?: number;
   preferencia?: PreferenciaCliente;
   urgencia?: UrgenciaInformada;
@@ -139,7 +157,15 @@ export class ConversationContextService {
     if (extraction.modelo) context.modelo = extraction.modelo;
     if (extraction.ano) context.ano = extraction.ano;
     if (extraction.tensao) context.tensao = extraction.tensao;
-    if (extraction.problema) context.problema = extraction.problema;
+    if (extraction.genericProblemMention && !extraction.problema && !context.problema) {
+      context.genericProblemMention = true;
+      context.symptom = undefined;
+    }
+    if (extraction.problema) {
+      context.problema = extraction.problema;
+      context.symptom = extraction.problema;
+      context.genericProblemMention = false;
+    }
     if (extraction.orcamentoMaximo) context.orcamentoMaximo = extraction.orcamentoMaximo;
     if (extraction.preferencia) context.preferencia = extraction.preferencia;
     if (extraction.urgencia) context.urgencia = extraction.urgencia;
@@ -207,11 +233,12 @@ export class ConversationContextService {
     const ano = this.extractYear(text);
     const tensao = this.extractVoltage(text, context);
     const problema = this.extractProblem(text);
+    const genericProblemMention = this.hasGenericProblemMention(text);
     const orcamentoMaximo = this.extractBudget(text);
     const preferencia = this.extractPreference(text, currentBody.preferencia);
     const urgencia = this.extractUrgency(text, currentBody.urgenciaInformada, problema);
 
-    return { tipoVeiculo, modelo, ano, tensao, problema, orcamentoMaximo, preferencia, urgencia };
+    return { tipoVeiculo, modelo, ano, tensao, problema, genericProblemMention, orcamentoMaximo, preferencia, urgencia };
   }
 
   private resetVehicleContext(context: ConversationContext, nextType?: TipoVeiculoContexto): ConversationContext {
@@ -294,6 +321,10 @@ export class ConversationContextService {
     const problem = problemasConhecidos.find((item) => includesNormalized(text, item));
     if (problem === "problema") return "problema não especificado";
     return problem;
+  }
+
+  private hasGenericProblemMention(text: string): boolean {
+    return mencoesGenericasProblema.some((item) => includesNormalized(text, item));
   }
 
   private extractBudget(text: string): number | undefined {

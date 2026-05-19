@@ -348,6 +348,7 @@ export class RecomendacaoService {
     }
 
     const temTensao = Boolean(contexto.tensao);
+    const mencaoGenericaSemSintoma = Boolean(contexto.genericProblemMention && !contexto.problema);
     const temProblema = Boolean(contexto.problema && contexto.problema !== "problema não especificado");
     const mensagemAtualTemTensao =
       includesNormalized(cliente.mensagem, "24v") ||
@@ -357,6 +358,17 @@ export class RecomendacaoService {
 
     if (!temTensao) {
       conversationContextService.setLastQuestionType(contexto.conversationId, "truck_voltage");
+      if (mencaoGenericaSemSintoma) {
+        return this.criarFalha(
+          "NEED_VEHICLE_MODEL_AND_SYMPTOM",
+          "Entendi que há um problema no caminhão, mas preciso do modelo, da tensão 12V/24V e do sintoma apresentado.",
+          "Caminhão informado com menção genérica de problema, sem tensão e sem sintoma",
+          ["modelo", "tensao", "descricaoProblema"],
+          "Informe o modelo do caminhão, se usa 12V ou 24V, e o que está acontecendo. Exemplo: 'Meu caminhão 24V não acende nada'.",
+          30,
+          contexto
+        );
+      }
       return this.criarFalha(
         "NEED_MORE_DETAILS",
         "Qual é o modelo do caminhão e ele usa sistema 12V ou 24V?",
@@ -389,6 +401,17 @@ export class RecomendacaoService {
   private validarPendenciasMoto(contexto: ConversationContext): RecomendacaoFalha | null {
     if (!contexto.modelo) {
       conversationContextService.setLastQuestionType(contexto.conversationId, "vehicle_model");
+      if (contexto.genericProblemMention && !contexto.problema) {
+        return this.criarFalha(
+          "NEED_VEHICLE_MODEL_AND_SYMPTOM",
+          "Entendi que há um problema na moto, mas preciso do modelo/cilindrada e do sintoma apresentado.",
+          "Moto informada com menção genérica de problema, sem modelo e sem sintoma",
+          ["modelo", "cilindrada", "descricaoProblema"],
+          "Informe o modelo/cilindrada da moto e o que está acontecendo. Exemplo: 'Minha CG 160 não acende nada'.",
+          30,
+          contexto
+        );
+      }
       return this.criarFalha(
         "NEED_MOTO_MODEL",
         "Para recomendar a bateria correta da moto, preciso do modelo e cilindrada. Exemplo: CG 160, Biz 125, Fazer 250 ou XRE 300.",
