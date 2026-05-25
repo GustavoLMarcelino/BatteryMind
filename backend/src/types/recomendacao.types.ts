@@ -6,6 +6,7 @@ import { Produto } from "./produto.types.js";
 import { AnaliseSentimentoResultado } from "./sentimento.types.js";
 import { MessageIntent } from "../services/intentDetection.service.js";
 import { SymptomAnalysis } from "./symptomTriage.types.js";
+import type { SemanticProblemAnalysis } from "../services/semanticProblemInterpreter.service.js";
 
 export interface IndividuoRecomendacao {
   produto: Produto;
@@ -19,19 +20,34 @@ export interface RecomendacaoResultado {
   inputConfidence: number;
   context: ConversationContext;
   extracted: InputExtraction;
+  semanticAnalysis: SemanticProblemAnalysis;
   symptomAnalysis: SymptomAnalysis;
-  analiseSentimento: Omit<AnaliseSentimentoResultado, "tokensProcessados">;
-  analiseFuzzy: FuzzyResultado;
   recomendacao: {
     produto: Pick<
       Produto,
       "id" | "nome" | "marca" | "amperagem" | "modelo" | "precoVenda" | "garantiaMeses" | "tipo"
     >;
     servicos: string[];
-    fitness: number;
-    confidenceLabel: "baixa confiança" | "confiança moderada" | "boa recomendação" | "recomendação otimizada";
+    veiculoResolvido: string;
+    aplicacaoUsada: string;
+    confidenceLabel: "opção recomendada" | "boa recomendação" | "recomendação com confirmação técnica";
     alerta?: string;
+    justificativaCliente: string;
     justificativa: string;
+  };
+  academicDetails: {
+    semanticProblemInterpreter: SemanticProblemAnalysis;
+    naiveBayes: Omit<AnaliseSentimentoResultado, "tokensProcessados">;
+    fuzzy: FuzzyResultado;
+    geneticAlgorithm: {
+      fitness: number;
+      criterios: {
+        compatibilidade: boolean;
+        estoqueDisponivel: boolean;
+        margemLucro: number;
+        preferenciaCliente: ClienteRequest["preferencia"];
+      };
+    };
   };
 }
 
@@ -46,12 +62,15 @@ export interface RecomendacaoFalha {
     inputConfidence: number;
     context?: ConversationContext;
     extracted?: InputExtraction;
+    semanticAnalysis?: SemanticProblemAnalysis;
   };
 }
 
 export interface RecomendacaoSucesso {
   success: true;
+  type: "RECOMMENDATION";
   message: string;
+  customerMessage: string;
   data: RecomendacaoResultado;
 }
 

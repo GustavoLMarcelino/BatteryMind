@@ -343,3 +343,185 @@ Content-Type: application/json
   "preferencia": "custo-beneficio",
   "urgenciaInformada": "baixa"
 }
+
+### Semantica 1: Onix sem bateria deve recomendar sem pedir sintoma
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "semantic-sem-bateria-onix",
+  "nomeCliente": "Cliente",
+  "mensagem": "Meu Onix está sem bateria",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Semantica 2: carro sem bateria deve pedir modelo, nao sintoma
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "semantic-sem-bateria-carro",
+  "nomeCliente": "Cliente",
+  "mensagem": "Meu carro está sem bateria",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Semantica 3: bateria explodiu deve ter alerta e prioridade urgente
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "semantic-explodiu-gol",
+  "nomeCliente": "Cliente",
+  "mensagem": "A bateria do meu Gol explodiu",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Semantica 4: vazamento de acido sem modelo deve pedir modelo com alerta
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "semantic-vazando-acido",
+  "nomeCliente": "Cliente",
+  "mensagem": "A bateria está vazando ácido",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Semantica 5: polo derreteu deve recomendar inspecao, nao bateria direta
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "semantic-polo-derreteu",
+  "nomeCliente": "Cliente",
+  "mensagem": "O polo derreteu",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Semantica 6: vive descarregando deve recomendar testes eletricos
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "semantic-vive-descarregando",
+  "nomeCliente": "Cliente",
+  "mensagem": "Minha bateria vive descarregando",
+  "veiculo": "Onix",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Semantica 7: bateria roubada do Onix deve recomendar instalacao
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "semantic-roubaram-onix",
+  "nomeCliente": "Cliente",
+  "mensagem": "Roubaram a bateria do meu Onix",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Compra 1: Chevette escrito com um T deve recomendar sem usar contexto Onix
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "compra-chevette-1",
+  "nomeCliente": "Cliente",
+  "mensagem": "meu chevete precisa de uma bateria",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Compra 2: Chevette com sintoma deve recomendar testes
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "compra-chevette-2",
+  "nomeCliente": "Cliente",
+  "mensagem": "meu chevette não liga",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Compra 3: Orcamento para Chevette sem sintoma
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "compra-chevette-3",
+  "nomeCliente": "Cliente",
+  "mensagem": "quanto fica uma bateria para chevette?",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Compra 4a: contexto anterior Onix
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "compra-chevette-contexto",
+  "nomeCliente": "Cliente",
+  "mensagem": "meu Onix não liga",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Compra 4b: nova mensagem troca contexto para Chevette
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "compra-chevette-contexto",
+  "nomeCliente": "Cliente",
+  "mensagem": "meu chevete precisa de uma bateria",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}
+
+### Compra 5: compra generica deve pedir modelo
+POST {{baseUrl}}/recomendar
+Content-Type: application/json
+
+{
+  "conversationId": "compra-carro-generico",
+  "nomeCliente": "Cliente",
+  "mensagem": "meu carro precisa de bateria",
+  "veiculo": "",
+  "orcamentoMaximo": 0,
+  "preferencia": "custo-beneficio",
+  "urgenciaInformada": "baixa"
+}

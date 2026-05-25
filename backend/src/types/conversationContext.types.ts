@@ -1,4 +1,5 @@
 import { PreferenciaCliente, UrgenciaInformada } from "./clienteRequest.types.js";
+import type { SemanticProblemAnalysis } from "../services/semanticProblemInterpreter.service.js";
 
 export type TipoVeiculoContexto = "carro" | "caminhao" | "moto" | "desconhecido";
 export type TensaoVeiculo = "12V" | "24V";
@@ -15,6 +16,10 @@ export type ConversationContext = {
   tensao?: TensaoVeiculo;
   problema?: string;
   symptom?: string;
+  semanticCategory?: SemanticProblemAnalysis["category"];
+  interpretedProblem?: string;
+  semanticSeverity?: SemanticProblemAnalysis["severity"];
+  semanticRecommendedServices?: string[];
   genericProblemMention?: boolean;
   orcamentoMaximo?: number;
   preferencia?: PreferenciaCliente;

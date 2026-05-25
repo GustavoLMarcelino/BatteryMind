@@ -1,5 +1,6 @@
 import { ClienteRequest, PreferenciaCliente, UrgenciaInformada } from "../types/clienteRequest.types.js";
 import { ConversationContext, TensaoVeiculo, TipoVeiculoContexto } from "../types/conversationContext.types.js";
+import type { SemanticProblemAnalysis } from "./semanticProblemInterpreter.service.js";
 import { includesNormalized, normalizeText } from "../utils/textPreprocessing.js";
 
 const contexts = new Map<string, ConversationContext>();
@@ -26,7 +27,8 @@ const carModels = [
   "toro",
   "s10",
   "ranger",
-  "amarok"
+  "amarok",
+  "chevette"
 ];
 
 const motoModels = [
@@ -57,7 +59,8 @@ const motoModels = [
 ];
 
 const aliasesModelos: Record<string, string> = {
-  onxi: "onix"
+  onxi: "onix",
+  chevete: "chevette"
 };
 
 const problemasConhecidos = [
@@ -66,7 +69,19 @@ const problemasConhecidos = [
   "nao liga nada",
   "morreu tudo",
   "sem energia",
+  "luz do painel fica fraca",
+  "luz do painel fica mais fraca",
+  "painel fica mais fraco",
+  "painel enfraquece",
+  "luz fica fraca",
+  "luz do painel apaga",
+  "painel apaga ao virar a chave",
   "painel pisca",
+  "painel pisca ao dar partida",
+  "painel fica piscando",
+  "luz do painel pisca",
+  "quando viro a chave fica fraco",
+  "ao virar a chave fica fraco",
   "arrasta para ligar",
   "partida pesada",
   "partida fraca",
@@ -189,6 +204,24 @@ export class ConversationContextService {
     contexts.set(conversationId, context);
   }
 
+  applySemanticAnalysis(conversationId: string, semanticAnalysis: SemanticProblemAnalysis): ConversationContext {
+    const context = this.getContext(conversationId);
+
+    if (semanticAnalysis.category !== "desconhecido") {
+      context.semanticCategory = semanticAnalysis.category;
+      context.interpretedProblem = semanticAnalysis.interpretedProblem;
+      context.semanticSeverity = semanticAnalysis.severity;
+      context.semanticRecommendedServices = semanticAnalysis.recommendedServices;
+      context.problema = semanticAnalysis.interpretedProblem;
+      context.symptom = semanticAnalysis.interpretedProblem;
+      context.genericProblemMention = false;
+    }
+
+    context.updatedAt = new Date();
+    contexts.set(conversationId, context);
+    return context;
+  }
+
   mergeContextWithRequest(context: ConversationContext, request: ClienteRequest): ClienteRequest {
     return {
       ...request,
@@ -279,7 +312,10 @@ export class ConversationContextService {
   private extractVehicleType(text: string, context: ConversationContext): TipoVeiculoContexto | undefined {
     if (includesNormalized(text, "caminhao")) return "caminhao";
     if (includesNormalized(text, "moto") || motoModels.some((model) => includesNormalized(text, model))) return "moto";
-    if (carModels.some((model) => new RegExp(`\\b${model}\\b`).test(text))) return "carro";
+    const carModelCandidates = this.isPoloTerminalContext(text)
+      ? carModels.filter((model) => model !== "polo")
+      : carModels;
+    if (carModelCandidates.some((model) => new RegExp(`\\b${model}\\b`).test(text))) return "carro";
     if (includesNormalized(text, "carro") || includesNormalized(text, "veiculo")) return "carro";
     if (context.tipoVeiculo === "caminhao" && /\b(ele|ela|e|usa|sistema)\b/.test(text)) return "caminhao";
 
@@ -290,8 +326,11 @@ export class ConversationContextService {
     const motoModel = motoModels.find((model) => includesNormalized(text, model));
     if (motoModel) return this.formatModel(motoModel);
 
+    const carModelCandidates = this.isPoloTerminalContext(text)
+      ? carModels.filter((model) => model !== "polo")
+      : carModels;
     const carModel =
-      carModels.find((model) => new RegExp(`\\b${model}\\b`).test(text)) ??
+      carModelCandidates.find((model) => new RegExp(`\\b${model}\\b`).test(text)) ??
       this.extractModelAlias(text);
 
     if (!carModel) return undefined;
@@ -310,6 +349,15 @@ export class ConversationContextService {
   private extractModelAlias(text: string): string | undefined {
     const alias = text.split(" ").find((token) => aliasesModelos[token]);
     return alias ? aliasesModelos[alias] : undefined;
+  }
+
+  private isPoloTerminalContext(text: string): boolean {
+    return (
+      includesNormalized(text, "polo derreteu") ||
+      includesNormalized(text, "polo queimou") ||
+      includesNormalized(text, "polo oxidado") ||
+      includesNormalized(text, "polo com zinabre")
+    );
   }
 
   private extractYear(text: string): string | undefined {
@@ -373,6 +421,7 @@ export class ConversationContextService {
       hb20: "HB20",
       s10: "S10",
       ka: "Ka",
+      chevette: "Chevette",
       xre: "XRE",
       cg: "CG"
     };

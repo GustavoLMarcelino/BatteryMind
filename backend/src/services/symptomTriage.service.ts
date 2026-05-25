@@ -16,9 +16,19 @@ const specificSymptomExpressions = [
   "nao liga nada",
   "morreu tudo",
   "sem energia",
+  "luz do painel fica fraca",
+  "luz do painel fica mais fraca",
+  "painel fica mais fraco",
+  "painel enfraquece",
+  "luz fica fraca",
+  "luz do painel apaga",
+  "painel apaga ao virar a chave",
   "painel pisca",
+  "painel pisca ao dar partida",
   "painel fica piscando",
   "luz do painel pisca",
+  "quando viro a chave fica fraco",
+  "ao virar a chave fica fraco",
   "arrasta para ligar",
   "partida pesada",
   "partida fraca",
@@ -66,7 +76,36 @@ export class SymptomTriageService {
       };
     }
 
-    if (this.hasAny(combinedText, ["painel pisca", "painel fica piscando", "luz do painel pisca", "arrasta para ligar", "partida pesada", "partida fraca", "motor gira fraco", "faz tec tec", "tec tec"])) {
+    if (
+      this.hasAny(combinedText, [
+        "luz do painel fica mais fraca",
+        "luz do painel fica fraca",
+        "painel fica mais fraco",
+        "painel enfraquece",
+        "luz fica fraca",
+        "luz do painel apaga",
+        "painel apaga ao virar a chave",
+        "painel pisca ao dar partida",
+        "painel pisca",
+        "painel fica piscando",
+        "luz do painel pisca",
+        "quando viro a chave fica fraco",
+        "ao virar a chave fica fraco"
+      ])
+    ) {
+      return {
+        symptomCategory: "bateria_fraca",
+        confidence: 80,
+        possibleCauses: ["bateria fraca", "baixa carga", "mau contato nos terminais"],
+        recommendedQuestions: [],
+        recommendedServices: ["Teste de bateria", "Teste elétrico", "Verificação dos terminais"],
+        canRecommendBatteryDirectly: true,
+        warning:
+          "Como a luz do painel fica fraca ao virar a chave, pode haver queda de tensão na partida. Recomendo realizar teste de bateria e verificação dos terminais antes da troca."
+      };
+    }
+
+    if (this.hasAny(combinedText, ["arrasta para ligar", "partida pesada", "partida fraca", "motor gira fraco", "faz tec tec", "tec tec"])) {
       return {
         symptomCategory: "bateria_fraca",
         confidence: 75,

@@ -3,16 +3,16 @@ import { Produto } from "../types/produto.types.js";
 export const produtos: Produto[] = [
   {
     id: 1,
-    nome: "Bateria Moura 60Ah",
-    marca: "Moura",
+    nome: "Bateria Real 60Ah",
+    marca: "Real",
     amperagem: 60,
     modelo: "60Ah",
-    precoVenda: 480,
-    custo: 350,
+    precoVenda: 350,
+    custo: 260,
     quantidadeEstoque: 5,
-    garantiaMeses: 18,
-    aplicacoesVeiculos: ["Gol 1.0", "Gol", "Onix 1.0", "Onix", "HB20 1.0", "HB20", "Uno", "Palio", "Celta"],
-    tipo: "intermediaria",
+    garantiaMeses: 12,
+    aplicacoesVeiculos: ["Gol", "Onix", "HB20", "Virtus", "Polo", "Saveiro", "Voyage", "Fox", "Celta", "Palio", "Uno", "Chevette"],
+    tipo: "economica",
     categoriaVeiculo: "carro"
   },
   {
@@ -133,12 +133,12 @@ export const produtos: Produto[] = [
     marca: "Moura",
     amperagem: 60,
     modelo: "60Ah",
-    precoVenda: 480,
-    custo: 350,
+    precoVenda: 660,
+    custo: 470,
     quantidadeEstoque: 5,
     garantiaMeses: 18,
-    aplicacoesVeiculos: ["Virtus", "Polo", "Gol", "Saveiro", "Voyage", "Fox"],
-    tipo: "intermediaria",
+    aplicacoesVeiculos: ["Gol", "Onix", "HB20", "Virtus", "Polo", "Saveiro", "Voyage", "Fox", "Celta", "Palio", "Uno", "Chevette"],
+    tipo: "premium",
     categoriaVeiculo: "carro"
   },
   {

@@ -5,8 +5,11 @@ const API_URL = '/api/recomendar';
 
 const veiculosConhecidos = [
   'Gol 1.0',
+  'Gol',
   'Onix 1.0',
+  'Onix',
   'HB20 1.0',
+  'HB20',
   'Corolla 2.0',
   'Hilux',
   'Virtus',
@@ -26,12 +29,15 @@ const veiculosConhecidos = [
   'Uno',
   'Palio',
   'Celta',
+  'Chevette',
+  'Chevete',
   'Caminhão 24V'
 ];
 
 function detectarVeiculo(texto) {
   const textoNormalizado = texto.toLowerCase();
-  return veiculosConhecidos.find((veiculo) => textoNormalizado.includes(veiculo.toLowerCase())) || '';
+  const veiculo = veiculosConhecidos.find((item) => textoNormalizado.includes(item.toLowerCase())) || '';
+  return veiculo === 'Chevete' ? 'Chevette' : veiculo;
 }
 
 function detectarOrcamento(texto) {
@@ -56,11 +62,11 @@ function detectarUrgencia(texto) {
 function detectarPreferencia(texto) {
   const textoNormalizado = texto.toLowerCase();
 
-  if (['barato', 'economia', 'econômico', 'economico'].some((termo) => textoNormalizado.includes(termo))) {
+  if (['barata', 'barato', 'economia', 'econômico', 'economico'].some((termo) => textoNormalizado.includes(termo))) {
     return 'economia';
   }
 
-  if (['melhor', 'premium', 'qualidade', 'boa'].some((termo) => textoNormalizado.includes(termo))) {
+  if (['melhor', 'top', 'premium', 'qualidade', 'moura', 'heliar', 'boa'].some((termo) => textoNormalizado.includes(termo))) {
     return 'qualidade';
   }
 
@@ -148,6 +154,7 @@ function App() {
       const resultado = data.data;
       const produto = resultado?.recomendacao?.produto;
       const servicos = resultado?.recomendacao?.servicos || [];
+      const academicDetails = resultado?.academicDetails;
 
       if (!produto) {
         setMessages((prev) => [
@@ -164,18 +171,32 @@ function App() {
       const botReply = {
         id: Date.now() + 1,
         sender: 'bot',
-        text: resultado.recomendacao.justificativa,
+        text: data.customerMessage || resultado.recomendacao.justificativaCliente || resultado.recomendacao.justificativa,
         type: 'recommendation',
         metadata: {
-          sentiment: `${resultado.analiseSentimento.sentimento} (${resultado.analiseSentimento.confianca}%)`,
-          urgency: `${resultado.analiseFuzzy.prioridade} (${resultado.analiseFuzzy.scoreFuzzy}/100)`,
-          optimization: `Fitness ${resultado.recomendacao.fitness}`,
+          semantic: academicDetails?.semanticProblemInterpreter
+            ? `${academicDetails.semanticProblemInterpreter.category} (${academicDetails.semanticProblemInterpreter.severity})`
+            : 'não informado',
+          sentiment: academicDetails?.naiveBayes
+            ? `${academicDetails.naiveBayes.sentimento} (${academicDetails.naiveBayes.confianca}%)`
+            : 'não informado',
+          urgency: academicDetails?.fuzzy
+            ? `${academicDetails.fuzzy.prioridade} (${academicDetails.fuzzy.scoreFuzzy}/100)`
+            : 'não informado',
+          optimization: academicDetails?.geneticAlgorithm
+            ? `Fitness ${academicDetails.geneticAlgorithm.fitness}`
+            : 'não informado',
           confidence: `${resultado.inputConfidence}/100`,
           confidenceLabel: resultado.recomendacao.confidenceLabel || 'recomendação'
         },
         product: {
           name: produto.nome,
-          description: `${produto.marca} ${produto.modelo} para ${resultado.entrada.veiculo}. Serviços: ${servicos.length ? servicos.join(', ') : 'orientação de compra'}.`,
+          brand: produto.marca,
+          amperage: `${produto.amperagem}Ah`,
+          warranty: `${produto.garantiaMeses} meses`,
+          application: `Compatível com ${resultado.recomendacao.aplicacaoUsada || resultado.recomendacao.veiculoResolvido || resultado.entrada.veiculo}`,
+          services: servicos,
+          justification: resultado.recomendacao.justificativaCliente || resultado.recomendacao.justificativa,
           price: produto.precoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         }
       };
@@ -233,7 +254,7 @@ function App() {
                 </div>
 
                 {msg.type === 'recommendation' && (
-                  <div className="bg-zinc-900 border-2 border-amber-400/90 rounded-2xl p-5 shadow-2xl space-y-4 animate-fade-in text-zinc-100">
+                  <div className="bg-zinc-900 border border-amber-400/70 rounded-2xl p-5 shadow-2xl space-y-4 animate-fade-in text-zinc-100">
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
                       <span className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
                         {msg.metadata.confidenceLabel}
@@ -245,27 +266,67 @@ function App() {
 
                     <div>
                       <h3 className="text-base font-black text-white tracking-wide">{msg.product.name}</h3>
-                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{msg.product.description}</p>
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-zinc-300 mt-3">
+                        <div>
+                          <dt className="text-zinc-500">Marca</dt>
+                          <dd className="font-semibold">{msg.product.brand}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-zinc-500">Amperagem</dt>
+                          <dd className="font-semibold">{msg.product.amperage}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-zinc-500">Garantia</dt>
+                          <dd className="font-semibold">{msg.product.warranty}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-zinc-500">Aplicação</dt>
+                          <dd className="font-semibold">{msg.product.application}</dd>
+                        </div>
+                      </dl>
                     </div>
 
-                    <div className="bg-zinc-950/80 rounded-xl p-3 text-[11px] text-zinc-400 space-y-2 border border-zinc-800">
-                      <div className="flex justify-between gap-4">
-                        <span className="text-zinc-500 font-medium">Entrada:</span>
-                        <span className="text-zinc-300 font-semibold">{msg.metadata.confidence}</span>
+                    {msg.product.services.length > 0 && (
+                      <div className="bg-zinc-950/70 rounded-xl p-3 text-xs text-zinc-300 border border-zinc-800">
+                        <p className="text-zinc-500 font-semibold mb-2">Serviços recomendados</p>
+                        <ul className="space-y-1">
+                          {msg.product.services.map((service) => (
+                            <li key={service}>- {service}</li>
+                          ))}
+                        </ul>
                       </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-zinc-500 font-medium">Camada I (PLN - Naive Bayes):</span>
-                        <span className="text-zinc-300 font-semibold">{msg.metadata.sentiment}</span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-zinc-500 font-medium">Camada II (Lógica Fuzzy):</span>
-                        <span className="text-zinc-300 font-semibold">{msg.metadata.urgency}</span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-zinc-500 font-medium">Camada III (Meta-heurística):</span>
-                        <span className="text-amber-400 font-semibold">{msg.metadata.optimization}</span>
-                      </div>
+                    )}
+
+                    <div className="text-xs text-zinc-300 leading-relaxed">
+                      <span className="text-zinc-500 font-semibold">Justificativa: </span>
+                      {msg.product.justification}
                     </div>
+
+                    <details className="bg-zinc-950/80 rounded-xl p-3 text-[11px] text-zinc-400 border border-zinc-800">
+                      <summary className="cursor-pointer text-zinc-300 font-semibold">Detalhes técnicos da IA</summary>
+                      <div className="space-y-2 mt-3">
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-500 font-medium">Entrada:</span>
+                          <span className="text-zinc-300 font-semibold">{msg.metadata.confidence}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-500 font-medium">Pré-processamento semântico:</span>
+                          <span className="text-zinc-300 font-semibold">{msg.metadata.semantic}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-500 font-medium">Camada I (PLN - Naive Bayes):</span>
+                          <span className="text-zinc-300 font-semibold">{msg.metadata.sentiment}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-500 font-medium">Camada II (Lógica Fuzzy):</span>
+                          <span className="text-zinc-300 font-semibold">{msg.metadata.urgency}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-500 font-medium">Camada III (Meta-heurística):</span>
+                          <span className="text-amber-400 font-semibold">{msg.metadata.optimization}</span>
+                        </div>
+                      </div>
+                    </details>
 
                     <button
                       onClick={() => alert('Direcionando para agendamento de entrega e instalação express!')}

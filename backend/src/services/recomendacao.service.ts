@@ -2,7 +2,7 @@ import { ClienteRequest, UrgenciaInformada } from "../types/clienteRequest.types
 import { ConversationContext } from "../types/conversationContext.types.js";
 import { FuzzyInput } from "../types/fuzzy.types.js";
 import { InputExtraction } from "../types/inputValidation.types.js";
-import { CategoriaVeiculo } from "../types/produto.types.js";
+import { CategoriaVeiculo, Produto } from "../types/produto.types.js";
 import { RecomendacaoFalha, RecomendacaoServiceResponse } from "../types/recomendacao.types.js";
 import { SymptomAnalysis } from "../types/symptomTriage.types.js";
 import { AppError } from "../utils/errors.js";
@@ -14,6 +14,8 @@ import { inputValidationService } from "./inputValidation.service.js";
 import { intentDetectionService, MessageIntent } from "./intentDetection.service.js";
 import { naiveBayesService } from "./naiveBayes.service.js";
 import { produtoService } from "./produto.service.js";
+import type { SemanticProblemAnalysis } from "./semanticProblemInterpreter.service.js";
+import { semanticProblemInterpreterService } from "./semanticProblemInterpreter.service.js";
 import { symptomTriageService } from "./symptomTriage.service.js";
 
 export class RecomendacaoService {
@@ -27,11 +29,13 @@ export class RecomendacaoService {
     }
 
     const conversationId = cliente.conversationId || "default";
-    const contexto = conversationContextService.updateContextFromMessage(
+    let contexto = conversationContextService.updateContextFromMessage(
       conversationId,
       cliente.mensagem,
       cliente
     );
+    const semanticAnalysis = semanticProblemInterpreterService.interpretProblemSemantically(cliente.mensagem);
+    contexto = conversationContextService.applySemanticAnalysis(conversationId, semanticAnalysis);
     const clienteComContexto = conversationContextService.mergeContextWithRequest(contexto, cliente);
     const bloqueioContextual = this.validarPendenciasContextuais(contexto, clienteComContexto);
 
@@ -39,7 +43,7 @@ export class RecomendacaoService {
       return bloqueioContextual;
     }
 
-    const validacaoEntrada = inputValidationService.validar(clienteComContexto);
+    const validacaoEntrada = inputValidationService.validar(clienteComContexto, semanticAnalysis);
 
     if (!validacaoEntrada.isValid) {
       return this.criarFalha(
@@ -51,12 +55,28 @@ export class RecomendacaoService {
           "Informe o modelo do veículo e descreva o problema. Exemplo: 'Meu Gol 1.0 não liga e preciso trocar a bateria hoje'.",
         validacaoEntrada.inputConfidence,
         contexto,
-        validacaoEntrada.extracted
+        validacaoEntrada.extracted,
+        semanticAnalysis
       );
     }
 
     const clienteInterpretado = this.aplicarExtracoes(clienteComContexto, validacaoEntrada.extracted);
     const symptomAnalysis = symptomTriageService.analyzeSymptoms(clienteInterpretado.mensagem, contexto);
+    const analysisForResponse = this.combinarAnaliseDeSintoma(symptomAnalysis, semanticAnalysis);
+
+    if (!semanticAnalysis.canRecommendBattery && semanticAnalysis.category === "polo_danificado") {
+      return this.criarFalha(
+        "NEED_MORE_DETAILS",
+        semanticAnalysis.customerMessage,
+        "Interpretação semântica indica problema principal nos terminais, sem confirmação de bateria danificada",
+        ["inspecaoTerminais"],
+        "Recomendo verificar os cabos, polos e terminais antes de trocar a bateria.",
+        validacaoEntrada.inputConfidence,
+        contexto,
+        validacaoEntrada.extracted,
+        semanticAnalysis
+      );
+    }
     const categoriaVeiculo = this.obterCategoriaVeiculo(contexto);
     const todosProdutosCompativeis = produtoService.listarCompativeisPorCategoria(
       clienteInterpretado.veiculo,
@@ -91,10 +111,11 @@ export class RecomendacaoService {
       );
     }
 
+    const produtosPriorizados = this.filtrarProdutosPorPreferencia(produtosCompativeis, clienteInterpretado);
     const analiseSentimento = naiveBayesService.analisar(clienteInterpretado.mensagem);
-    const urgencia = this.calcularUrgencia(clienteInterpretado);
+    const urgencia = this.calcularUrgencia(clienteInterpretado, semanticAnalysis);
     const produtoReferencia = this.selecionarProdutoReferencia(
-      produtosCompativeis,
+      produtosPriorizados,
       clienteInterpretado.orcamentoMaximo
     );
     const margemReferencia =
@@ -104,12 +125,14 @@ export class RecomendacaoService {
       urgencia,
       orcamento: clienteInterpretado.orcamentoMaximo,
       estoqueDisponivel: produtoReferencia.quantidadeEstoque,
-      margemLucro: margemReferencia
+      margemLucro: margemReferencia,
+      semanticSeverity: semanticAnalysis.severity,
+      semanticCategory: semanticAnalysis.category
     };
     const analiseFuzzy = fuzzyService.calcular(fuzzyInput);
     const servicosBase = this.definirServicos(clienteInterpretado, analiseFuzzy.prioridade);
     const melhorIndividuo = geneticAlgorithmService.executar({
-      produtos: produtosCompativeis,
+      produtos: produtosPriorizados,
       cliente: clienteInterpretado,
       fuzzy: analiseFuzzy,
       servicosBase
@@ -132,23 +155,34 @@ export class RecomendacaoService {
       );
     }
 
+    const servicosCliente = semanticAnalysis.category !== "desconhecido"
+      ? semanticAnalysis.recommendedServices
+      : this.mesclarServicos(melhorIndividuo.servicos, analysisForResponse.recommendedServices);
+    const customerMessage = this.gerarMensagemCliente(clienteInterpretado, contexto, analysisForResponse, semanticAnalysis);
+    const justificativaCliente = this.gerarJustificativaCliente(
+      clienteInterpretado,
+      melhorIndividuo.produto,
+      contexto,
+      analysisForResponse,
+      semanticAnalysis
+    );
+    const margemLucro = Number(
+      ((melhorIndividuo.produto.precoVenda - melhorIndividuo.produto.custo) / melhorIndividuo.produto.precoVenda).toFixed(4)
+    );
+
     return {
       success: true,
+      type: "RECOMMENDATION",
       message: "Recomendação gerada com sucesso",
+      customerMessage,
       data: {
         cliente: clienteInterpretado.nomeCliente,
         entrada: clienteInterpretado,
         inputConfidence: validacaoEntrada.inputConfidence,
         context: contexto,
         extracted: validacaoEntrada.extracted,
-        symptomAnalysis,
-        analiseSentimento: {
-          sentimento: analiseSentimento.sentimento,
-          confianca: analiseSentimento.confianca,
-          probabilidades: analiseSentimento.probabilidades,
-          ...(analiseSentimento.observacao ? { observacao: analiseSentimento.observacao } : {})
-        },
-        analiseFuzzy,
+        semanticAnalysis,
+        symptomAnalysis: analysisForResponse,
         recomendacao: {
           produto: {
             id: melhorIndividuo.produto.id,
@@ -160,32 +194,58 @@ export class RecomendacaoService {
             garantiaMeses: melhorIndividuo.produto.garantiaMeses,
             tipo: melhorIndividuo.produto.tipo
           },
-          servicos: this.mesclarServicos(melhorIndividuo.servicos, symptomAnalysis.recommendedServices),
-          fitness: melhorIndividuo.fitness,
-          confidenceLabel: this.classificarFitness(melhorIndividuo.fitness),
+          servicos: servicosCliente,
+          veiculoResolvido: clienteInterpretado.veiculo,
+          aplicacaoUsada: clienteInterpretado.veiculo,
+          confidenceLabel: this.classificarRecomendacao(melhorIndividuo.fitness, analysisForResponse),
           ...(melhorIndividuo.fitness < 60
-            ? { alerta: "Recomendação com baixa confiança. Confirme aplicação antes da venda." }
+            ? { alerta: "Confirme a aplicação e faça o teste elétrico antes da troca." }
             : {}),
-          justificativa: this.gerarJustificativa(
-            clienteInterpretado,
-            melhorIndividuo.produto.precoVenda,
-            contexto,
-            symptomAnalysis
-          )
+          justificativaCliente,
+          justificativa: justificativaCliente
+        },
+        academicDetails: {
+          semanticProblemInterpreter: semanticAnalysis,
+          naiveBayes: {
+            sentimento: analiseSentimento.sentimento,
+            confianca: analiseSentimento.confianca,
+            probabilidades: analiseSentimento.probabilidades,
+            ...(analiseSentimento.observacao ? { observacao: analiseSentimento.observacao } : {})
+          },
+          fuzzy: analiseFuzzy,
+          geneticAlgorithm: {
+            fitness: melhorIndividuo.fitness,
+            criterios: {
+              compatibilidade: true,
+              estoqueDisponivel: melhorIndividuo.produto.quantidadeEstoque > 0,
+              margemLucro,
+              preferenciaCliente: clienteInterpretado.preferencia
+            }
+          }
         }
       }
     };
   }
 
-  calcularUrgencia(cliente: ClienteRequest): number {
+  calcularUrgencia(cliente: ClienteRequest, semanticAnalysis?: SemanticProblemAnalysis): number {
     const basePorUrgencia = {
       baixa: 0.25,
       media: 0.55,
       alta: 0.8
     } satisfies Record<UrgenciaInformada, number>;
+    const urgenciaSemantica = {
+      baixa: 0.25,
+      media: 0.55,
+      alta: 0.8,
+      critica: 1
+    } satisfies Record<SemanticProblemAnalysis["severity"], number>;
     const palavrasChave = ["urgente", "hoje", "agora", "não liga", "nao liga", "parado", "socorro"];
     const reforcos = palavrasChave.filter((palavra) => includesNormalized(cliente.mensagem, palavra));
-    const urgencia = basePorUrgencia[cliente.urgenciaInformada] + reforcos.length * 0.08;
+    const base = Math.max(
+      basePorUrgencia[cliente.urgenciaInformada],
+      semanticAnalysis ? urgenciaSemantica[semanticAnalysis.severity] : 0
+    );
+    const urgencia = base + reforcos.length * 0.08;
 
     return Number(Math.min(1, urgencia).toFixed(2));
   }
@@ -198,6 +258,7 @@ export class RecomendacaoService {
       ...cliente,
       veiculo: cliente.veiculo?.trim() || extracted.veiculo || "",
       orcamentoMaximo: extracted.orcamento ?? orcamentoInformado,
+      preferencia: this.inferirPreferencia(cliente),
       urgenciaInformada: this.escolherUrgenciaMaisForte(cliente.urgenciaInformada, extracted.urgencia)
     };
   }
@@ -215,6 +276,30 @@ export class RecomendacaoService {
     const candidatos = dentroDoOrcamento.length > 0 ? dentroDoOrcamento : produtos;
 
     return candidatos.sort((a, b) => b.quantidadeEstoque - a.quantidadeEstoque)[0];
+  }
+
+  private filtrarProdutosPorPreferencia(produtos: Produto[], cliente: ClienteRequest): Produto[] {
+    const mensagem = cliente.mensagem;
+    const pediuMarcaPremium = includesNormalized(mensagem, "moura") || includesNormalized(mensagem, "heliar");
+    const semOrcamento = cliente.orcamentoMaximo <= 0;
+    const candidatosComOrcamento =
+      cliente.orcamentoMaximo > 0 ? produtos.filter((produto) => produto.precoVenda <= cliente.orcamentoMaximo) : [];
+    const base = candidatosComOrcamento.length > 0 ? candidatosComOrcamento : produtos;
+
+    if (cliente.preferencia === "qualidade" || pediuMarcaPremium) {
+      const premium = base.filter(
+        (produto) => produto.tipo === "premium" || ["moura", "heliar"].includes(produto.marca.toLowerCase())
+      );
+      return premium.length > 0 ? premium : base;
+    }
+
+    if (cliente.preferencia === "economia" || (cliente.preferencia === "custo-beneficio" && semOrcamento)) {
+      const economicas = base.filter((produto) => produto.tipo === "economica");
+      return economicas.length > 0 ? economicas : base;
+    }
+
+    const custoBeneficio = base.filter((produto) => produto.tipo !== "premium");
+    return custoBeneficio.length > 0 ? custoBeneficio : base;
   }
 
   private definirServicos(cliente: ClienteRequest, prioridade: string): string[] {
@@ -235,33 +320,153 @@ export class RecomendacaoService {
       servicos.add("Teste de fuga de corrente");
     }
 
-    if (cliente.preferencia === "economia") {
-      servicos.add("Comparação de opções econômicas");
-    }
-
     return [...servicos];
   }
 
-  private gerarJustificativa(
+  private combinarAnaliseDeSintoma(
+    symptomAnalysis: SymptomAnalysis,
+    semanticAnalysis: SemanticProblemAnalysis
+  ): SymptomAnalysis {
+    if (semanticAnalysis.category === "desconhecido") {
+      return symptomAnalysis;
+    }
+
+    const categoryBySemantic: Record<SemanticProblemAnalysis["category"], SymptomAnalysis["symptomCategory"]> = {
+      bateria_ausente: "sem_energia",
+      bateria_explodiu: "sem_energia",
+      vazamento_acido: "sem_energia",
+      bateria_inchada: "sem_energia",
+      polo_danificado: "desconhecido",
+      sem_carga: "problema_recorrente",
+      bateria_fraca: "bateria_fraca",
+      problema_eletrico: "desconhecido",
+      sintoma_generico: "generico_nao_liga",
+      intencao_compra_bateria: "sintoma_nao_informado",
+      desconhecido: symptomAnalysis.symptomCategory
+    };
+
+    return {
+      symptomCategory: categoryBySemantic[semanticAnalysis.category],
+      confidence: Math.max(
+        symptomAnalysis.confidence,
+        semanticAnalysis.category === "sintoma_generico" ? 60 : semanticAnalysis.isPurchaseIntent ? 70 : 90
+      ),
+      possibleCauses: [...new Set([...symptomAnalysis.possibleCauses, semanticAnalysis.interpretedProblem])],
+      recommendedQuestions: semanticAnalysis.canRecommendBattery ? [] : symptomAnalysis.recommendedQuestions,
+      recommendedServices: [...new Set([...symptomAnalysis.recommendedServices, ...semanticAnalysis.recommendedServices])],
+      canRecommendBatteryDirectly: semanticAnalysis.canRecommendBattery,
+      warning: semanticAnalysis.requiresSafetyWarning ? semanticAnalysis.customerMessage : symptomAnalysis.warning
+    };
+  }
+
+  private gerarMensagemCliente(
     cliente: ClienteRequest,
-    precoVenda: number,
     contexto: ConversationContext,
-    symptomAnalysis: SymptomAnalysis
+    symptomAnalysis: SymptomAnalysis,
+    semanticAnalysis: SemanticProblemAnalysis
   ): string {
-    const textoOrcamento =
-      cliente.orcamentoMaximo <= 0
-        ? "sem orçamento máximo informado"
-        : precoVenda <= cliente.orcamentoMaximo
-          ? "dentro do orçamento informado"
-          : "próximo ao orçamento informado";
+    if (semanticAnalysis.category !== "desconhecido") {
+      if (semanticAnalysis.category === "intencao_compra_bateria" && cliente.veiculo) {
+        return `Separei uma opção compatível para ${cliente.veiculo}. Como você não informou nenhum sintoma, estou considerando que é uma solicitação de orçamento/troca de bateria. Se o veículo estiver apresentando problema, me diga o que acontece, por exemplo: não liga, partida fraca ou painel apagando.`;
+      }
 
-    const avisoCaminhao =
-      contexto.tipoVeiculo === "caminhao" && !contexto.modelo
-        ? " Como o modelo exato do caminhão não foi informado, a recomendação considera apenas o sistema 24V. O ideal é confirmar o modelo antes da venda."
-        : "";
-    const avisoSintoma = symptomAnalysis.warning ? ` ${symptomAnalysis.warning}` : "";
+      if (semanticAnalysis.category === "bateria_ausente" && cliente.veiculo) {
+        return `Entendi que o veículo está sem bateria instalada. Posso indicar uma bateria compatível com o ${cliente.veiculo} e recomendo realizar a instalação com verificação dos terminais.`;
+      }
 
-    return `Produto compatível com o veículo, ${textoOrcamento}, com estoque disponível, boa margem de lucro e adequado para atendimento ${cliente.urgenciaInformada}.${avisoSintoma}${avisoCaminhao}`;
+      return semanticAnalysis.customerMessage;
+    }
+
+    if (symptomAnalysis.symptomCategory === "bateria_fraca" && symptomAnalysis.confidence >= 80) {
+      return "Como a luz do painel fica fraca ao virar a chave, pode haver queda de tensão na partida. Recomendo realizar teste de bateria e verificação dos terminais antes da troca.";
+    }
+
+    if (symptomAnalysis.symptomCategory === "generico_nao_liga") {
+      return "Quando o veículo não liga, pode ser bateria fraca, baixa carga, mau contato nos terminais ou outra falha elétrica. Recomendo fazer um teste elétrico antes da troca para confirmar a causa.";
+    }
+
+    if (symptomAnalysis.symptomCategory === "sem_energia") {
+      return "Esse sintoma pode indicar bateria descarregada ou mau contato nos terminais. Recomendo fazer um teste de bateria e verificar os terminais antes da troca.";
+    }
+
+    if (symptomAnalysis.symptomCategory === "problema_recorrente") {
+      return "Como o problema parece recorrente, o ideal é testar bateria, alternador e fuga de corrente antes de substituir a bateria.";
+    }
+
+    if (cliente.preferencia === "qualidade") {
+      return "Separei uma opção premium compatível com o veículo informado, com foco em qualidade e garantia. A confirmação final deve ser feita após teste elétrico.";
+    }
+
+    if (contexto.tipoVeiculo === "caminhao") {
+      return "Separei uma opção compatível com o sistema informado. Para caminhão, confirme a tensão e faça o teste elétrico antes da troca.";
+    }
+
+    return "Separei uma opção compatível com o veículo informado. Antes da troca, recomendamos realizar teste de bateria, alternador e terminais para confirmar a causa do problema.";
+  }
+
+  private gerarJustificativaCliente(
+    cliente: ClienteRequest,
+    produto: Produto,
+    contexto: ConversationContext,
+    symptomAnalysis: SymptomAnalysis,
+    semanticAnalysis: SemanticProblemAnalysis
+  ): string {
+    if (semanticAnalysis.requiresSafetyWarning) {
+      return "Opção compatível para substituição, com atendimento técnico recomendado por segurança. Antes da instalação, verifique terminais, alternador e sistema de carga.";
+    }
+
+    if (semanticAnalysis.category === "bateria_ausente") {
+      return "Opção compatível para instalação no veículo informado. Recomendo verificar os terminais e testar o sistema de carga após a instalação.";
+    }
+
+    if (semanticAnalysis.category === "intencao_compra_bateria") {
+      return `Opção compatível com ${cliente.veiculo}. A confirmação final da aplicação deve ser feita antes da instalação.`;
+    }
+
+    if (cliente.preferencia === "qualidade" || produto.tipo === "premium") {
+      return "Opção premium compatível com o veículo informado, indicada para quem prioriza qualidade e garantia. A confirmação final deve ser feita após teste elétrico.";
+    }
+
+    if (cliente.preferencia === "economia") {
+      return "Opção econômica compatível com o veículo informado. A confirmação final deve ser feita após teste elétrico.";
+    }
+
+    if (symptomAnalysis.canRecommendBatteryDirectly) {
+      return "Opção compatível com o veículo informado. A confirmação final deve ser feita após teste elétrico.";
+    }
+
+    if (contexto.tipoVeiculo === "caminhao") {
+      return "Produto compatível com a categoria informada. Confirme o modelo e a tensão do sistema antes da instalação.";
+    }
+
+    return "Produto indicado como opção compatível. A confirmação final deve ser feita após teste elétrico no veículo.";
+  }
+
+  private inferirPreferencia(cliente: ClienteRequest): ClienteRequest["preferencia"] {
+    const mensagem = cliente.mensagem;
+
+    if (
+      includesNormalized(mensagem, "barata") ||
+      includesNormalized(mensagem, "barato") ||
+      includesNormalized(mensagem, "economia") ||
+      includesNormalized(mensagem, "economico") ||
+      includesNormalized(mensagem, "econômico")
+    ) {
+      return "economia";
+    }
+
+    if (
+      includesNormalized(mensagem, "melhor") ||
+      includesNormalized(mensagem, "top") ||
+      includesNormalized(mensagem, "qualidade") ||
+      includesNormalized(mensagem, "premium") ||
+      includesNormalized(mensagem, "moura") ||
+      includesNormalized(mensagem, "heliar")
+    ) {
+      return "qualidade";
+    }
+
+    return cliente.preferencia;
   }
 
   private criarMensagemSemProduto(extracted: InputExtraction): string {
@@ -297,7 +502,8 @@ export class RecomendacaoService {
     suggestedQuestion: string,
     inputConfidence: number,
     context?: ConversationContext,
-    extracted?: InputExtraction
+    extracted?: InputExtraction,
+    semanticAnalysis?: SemanticProblemAnalysis
   ): RecomendacaoFalha {
     return {
       success: false,
@@ -309,7 +515,8 @@ export class RecomendacaoService {
         suggestedQuestion,
         inputConfidence,
         ...(context ? { context } : {}),
-        ...(extracted ? { extracted } : {})
+        ...(extracted ? { extracted } : {}),
+        ...(semanticAnalysis ? { semanticAnalysis } : {})
       }
     };
   }
@@ -449,11 +656,16 @@ export class RecomendacaoService {
     return [...new Set([...servicos, ...servicosTriagem])];
   }
 
-  private classificarFitness(fitness: number): "baixa confiança" | "confiança moderada" | "boa recomendação" | "recomendação otimizada" {
-    if (fitness <= 49) return "baixa confiança";
-    if (fitness <= 69) return "confiança moderada";
+  private classificarRecomendacao(
+    fitness: number,
+    symptomAnalysis: SymptomAnalysis
+  ): "opção recomendada" | "boa recomendação" | "recomendação com confirmação técnica" {
+    if (!symptomAnalysis.canRecommendBatteryDirectly || symptomAnalysis.confidence < 70 || fitness < 60) {
+      return "recomendação com confirmação técnica";
+    }
+
     if (fitness <= 84) return "boa recomendação";
-    return "recomendação otimizada";
+    return "opção recomendada";
   }
 }
 

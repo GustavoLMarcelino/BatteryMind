@@ -7,6 +7,8 @@ export interface FuzzyInput {
   orcamento: number;
   estoqueDisponivel: number;
   margemLucro: number;
+  semanticSeverity?: "baixa" | "media" | "alta" | "critica";
+  semanticCategory?: string;
 }
 
 export interface FuzzyResultado {

@@ -31,11 +31,14 @@ export class FuzzyService {
       score = Math.min(score, 25);
     }
 
+    score = this.aplicarGravidadeSemantica(score, input);
+    score = this.aplicarIntencaoCompra(score, input);
+
     const scoreFuzzy = Math.round(Math.max(0, Math.min(100, score)));
 
     return {
       scoreFuzzy,
-      prioridade: this.converterPrioridade(scoreFuzzy),
+      prioridade: this.aplicarPrioridadeMinima(this.converterPrioridade(scoreFuzzy), input),
       nivelRisco: this.converterRisco(scoreFuzzy)
     };
   }
@@ -70,6 +73,60 @@ export class FuzzyService {
     if (score <= 39) return "baixo";
     if (score <= 74) return "medio";
     return "alto";
+  }
+
+  private aplicarGravidadeSemantica(score: number, input: FuzzyInput): number {
+    const reforcoPorGravidade = {
+      baixa: 0,
+      media: 8,
+      alta: 18,
+      critica: 32
+    } satisfies Record<NonNullable<FuzzyInput["semanticSeverity"]>, number>;
+
+    const reforco = input.semanticSeverity ? reforcoPorGravidade[input.semanticSeverity] : 0;
+
+    if (["bateria_explodiu", "vazamento_acido"].includes(input.semanticCategory ?? "")) {
+      return Math.max(score + reforco, 86);
+    }
+
+    if (["bateria_inchada", "polo_danificado"].includes(input.semanticCategory ?? "")) {
+      return Math.max(score + reforco, 75);
+    }
+
+    return score + reforco;
+  }
+
+  private aplicarIntencaoCompra(score: number, input: FuzzyInput): number {
+    if (input.semanticCategory !== "intencao_compra_bateria") {
+      return score;
+    }
+
+    if (input.urgencia >= 0.8) {
+      return Math.min(70, Math.max(score, 55));
+    }
+
+    return Math.min(55, Math.max(score, 42));
+  }
+
+  private aplicarPrioridadeMinima(prioridade: Prioridade, input: FuzzyInput): Prioridade {
+    if (["bateria_explodiu", "vazamento_acido"].includes(input.semanticCategory ?? "")) {
+      return "urgente";
+    }
+
+    if (["bateria_inchada", "polo_danificado"].includes(input.semanticCategory ?? "")) {
+      return this.prioridadeMaisAlta(prioridade, "alta");
+    }
+
+    if (input.semanticCategory === "intencao_compra_bateria" && input.urgencia < 0.8) {
+      return prioridade === "baixa" ? "baixa" : "media";
+    }
+
+    return prioridade;
+  }
+
+  private prioridadeMaisAlta(atual: Prioridade, minima: Prioridade): Prioridade {
+    const peso = { baixa: 1, media: 2, alta: 3, urgente: 4 } satisfies Record<Prioridade, number>;
+    return peso[atual] >= peso[minima] ? atual : minima;
   }
 
   private validarInput(input: FuzzyInput): void {

@@ -3,6 +3,7 @@ import {
   InputExtraction,
   InputValidationResultado
 } from "../types/inputValidation.types.js";
+import type { SemanticProblemAnalysis } from "./semanticProblemInterpreter.service.js";
 import { includesNormalized, normalizeText, tokenize } from "../utils/textPreprocessing.js";
 
 const palavrasGenericas = new Set([
@@ -39,7 +40,8 @@ const modelosConhecidos = [
   "toro",
   "s10",
   "ranger",
-  "amarok"
+  "amarok",
+  "chevette"
 ];
 
 const modelosMoto = [
@@ -70,7 +72,8 @@ const modelosMoto = [
 ];
 
 const aliasesModelos: Record<string, string> = {
-  onxi: "onix"
+  onxi: "onix",
+  chevete: "chevette"
 };
 
 const veiculosGenericos = ["carro", "veiculo", "automovel", "caminhao", "moto"];
@@ -100,9 +103,19 @@ const problemasConhecidos = [
   "painel nao acende",
   "nao liga nada",
   "sem energia",
+  "luz do painel fica fraca",
+  "luz do painel fica mais fraca",
+  "painel fica mais fraco",
+  "painel enfraquece",
+  "luz fica fraca",
+  "luz do painel apaga",
+  "painel apaga ao virar a chave",
   "painel pisca",
+  "painel pisca ao dar partida",
   "painel fica piscando",
   "luz do painel pisca",
+  "quando viro a chave fica fraco",
+  "ao virar a chave fica fraco",
   "faz tec tec",
   "tec tec",
   "nao esta ligando",
@@ -147,14 +160,15 @@ const mencoesGenericasProblema = [
 const palavrasUrgencia = ["urgente", "hoje", "agora", "socorro", "parado"];
 
 export class InputValidationService {
-  validar(cliente: ClienteRequest): InputValidationResultado {
+  validar(cliente: ClienteRequest, semanticAnalysis?: SemanticProblemAnalysis): InputValidationResultado {
     const mensagem = cliente.mensagem ?? "";
     const tokens = tokenize(mensagem);
     const mensagemNormalizada = normalizeText(mensagem);
     const extracted = this.extrairInformacoes(cliente);
+    const semanticHasProblem = Boolean(semanticAnalysis && semanticAnalysis.category !== "desconhecido");
     const hasVehicle = Boolean(cliente.veiculo?.trim() || extracted.veiculo);
-    const hasDomainKeyword = this.temContextoAutomotivo(mensagem, extracted);
-    const hasProblemDescription = extracted.hasSpecificSymptom;
+    const hasDomainKeyword = this.temContextoAutomotivo(mensagem, extracted) || semanticHasProblem;
+    const hasProblemDescription = extracted.hasSpecificSymptom || semanticHasProblem;
     const hasValidBudget = Number(cliente.orcamentoMaximo) > 0 || extracted.orcamento !== null;
     const hasClearUrgency = extracted.urgencia === "alta";
     const inputConfidence = this.calcularConfianca({
@@ -193,7 +207,20 @@ export class InputValidationService {
       );
     }
 
-    if (extracted.isGenericVehicle && !extracted.hasSpecificSymptom && extracted.hasGenericProblemMention) {
+    if (semanticHasProblem && (!extracted.veiculo || extracted.isGenericVehicle)) {
+      return this.criarResultadoInvalido(
+        "MISSING_VEHICLE",
+        this.criarMensagemModeloFaltantePorSemantica(semanticAnalysis),
+        "Interpretação semântica suficiente, mas veículo sem modelo específico",
+        ["modelo"],
+        inputConfidence,
+        this.criarMensagemModeloFaltantePorSemantica(semanticAnalysis),
+        extracted,
+        { hasVehicle, hasDomainKeyword, hasProblemDescription, hasValidBudget, hasClearUrgency }
+      );
+    }
+
+    if (extracted.isGenericVehicle && !extracted.hasSpecificSymptom && !semanticHasProblem && extracted.hasGenericProblemMention) {
       return this.criarResultadoInvalido(
         "NEED_VEHICLE_MODEL_AND_SYMPTOM",
         this.criarMensagemModeloESintoma(extracted),
@@ -219,7 +246,7 @@ export class InputValidationService {
       );
     }
 
-    if (!extracted.hasSpecificSymptom && !this.temIntencaoClaraDeCompra(extracted)) {
+    if (!extracted.hasSpecificSymptom && !semanticHasProblem && !this.temIntencaoClaraDeCompra(extracted)) {
       return this.criarResultadoInvalido(
         "NEED_MORE_DETAILS",
         this.criarMensagemSintomaFaltante(extracted),
@@ -304,8 +331,11 @@ export class InputValidationService {
     if (modeloMoto) return this.formatarModelo(modeloMoto);
     if (/\bmoto\b/.test(texto)) return "Moto";
 
+    const modelosCarro = this.isPoloTerminalContext(texto)
+      ? modelosConhecidos.filter((item) => item !== "polo")
+      : modelosConhecidos;
     const modelo =
-      modelosConhecidos.find((item) => new RegExp(`\\b${item}\\b`).test(texto)) ??
+      modelosCarro.find((item) => new RegExp(`\\b${item}\\b`).test(texto)) ??
       this.extrairModeloPorAlias(texto);
 
     if (modelo) {
@@ -468,6 +498,30 @@ export class InputValidationService {
     return "Entendi que há um problema no veículo, mas ainda preciso saber o modelo e o sintoma apresentado.";
   }
 
+  private criarMensagemModeloFaltantePorSemantica(semanticAnalysis?: SemanticProblemAnalysis): string {
+    if (semanticAnalysis?.category === "intencao_compra_bateria") {
+      return "Qual é o modelo do carro para eu indicar a bateria correta?";
+    }
+
+    if (semanticAnalysis?.category === "bateria_ausente") {
+      return "Entendi que o veículo está sem bateria. Qual é o modelo do veículo para eu indicar a bateria correta?";
+    }
+
+    if (semanticAnalysis?.category === "bateria_explodiu") {
+      return "Entendi que houve um problema grave com a bateria. Por segurança, não tente ligar o veículo. Qual é o modelo do veículo para eu indicar uma substituição compatível?";
+    }
+
+    if (semanticAnalysis?.category === "vazamento_acido") {
+      return "Pode ser vazamento de ácido da bateria. Evite contato com o líquido. Qual é o modelo do veículo para eu indicar a bateria correta?";
+    }
+
+    if (semanticAnalysis?.category === "polo_danificado") {
+      return "Entendi que pode haver problema nos polos ou terminais. Recomendo verificar os cabos e terminais antes de trocar a bateria. Qual é o modelo do veículo para eu orientar a inspeção corretamente?";
+    }
+
+    return "Entendi o problema informado. Qual é o modelo do veículo para eu indicar a bateria correta?";
+  }
+
   private descreverTipoVeiculo(extracted: InputExtraction): string {
     if (extracted.tipoVeiculo === "moto") return "moto";
     if (extracted.tipoVeiculo === "caminhao") return "caminhao";
@@ -522,7 +576,8 @@ export class InputValidationService {
     const nomes: Record<string, string> = {
       hb20: "HB20",
       s10: "S10",
-      ka: "Ka"
+      ka: "Ka",
+      chevette: "Chevette"
     };
 
     return nomes[modelo] ?? modelo.charAt(0).toUpperCase() + modelo.slice(1);
@@ -533,6 +588,15 @@ export class InputValidationService {
     const alias = tokens.find((token) => aliasesModelos[token]);
 
     return alias ? aliasesModelos[alias] : null;
+  }
+
+  private isPoloTerminalContext(texto: string): boolean {
+    return (
+      includesNormalized(texto, "polo derreteu") ||
+      includesNormalized(texto, "polo queimou") ||
+      includesNormalized(texto, "polo oxidado") ||
+      includesNormalized(texto, "polo com zinabre")
+    );
   }
 }
 
